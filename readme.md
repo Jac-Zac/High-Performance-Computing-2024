@@ -55,19 +55,20 @@ Here below the schedule for lectures and tutorials.
 | Mon, Mar 31  |  S.C. lecture | 
 | Tue, Apr 01  |  L.T.  lecture |                                     |     
 | Mon, Apr 07  |  S.C. lecture |                                     |
-| Tue, Apr 08  |                              |  [4] [Tutorial 4: OpenMP]    |
-| Mon, Apr 14  |  [8] [ More on MPI] (S.C.)      |    |              
-| Tue, Apr 15  |  [9] [ More on OpenMP] (L.T.)      |
-| Fri, Oct 27  |                              |  [5] [Tutorial 5: MPI and OpenMP, hybrid     |
-| Tue, Oct 31  |  [10] [Debugging and Profiling ] (L.T.)        |                                     | 
-| Tue, Nov 07  |          | [6] [Tutorial 6: Debugging & profiling]                                    | 
-| Thu, Nov 09  |  [11] [Basic on Serial code Optimization 1] (L.T.) |      
-| Fri, Nov 10  |  [12] [Basic on Serial code Optimization 2] (L.T.)  |  |
-| Fri, Nov 10  |                              | [7] [Tutorial 7: Serial Code Optimization |
-| Tue, Nov 14  |  [13] [Storage for HPC] (S.C.)  |                                     |    
-| Tue, Nov 21  |  [14] [HPC libraries] (S.C.)        |                                     |
-| Thu, Nov 23  |  [15] [Basic on benchmarking] (S.C.) |  
-| Tue, Nov 28  |        |         [8] [Tutorial 8: HPC libs and benchmarking   |
+| Tue, Apr 08  |  L.T.  lecture                            |     |
+| Mon, Apr 14  |  S.C. lecture    |    |              
+| Tue, Apr 15  |  L.T.  lecture    |
+| Tue, Apr 22  |  L.T.  lecture                       |      |
+| Mon, Apr 28  |  S.C. lecture     |                                     | 
+| Tue, Apr 29  |  S.C. lecture                                   | 
+| Mon, May 05  |  S.C. lecture  |      
+| Tue, May 06  |  L.T.  lecture  |  |
+| Mon, May 12  |   S.C. lecture                           |  |
+| Tue, May 13  |  S.C. lecture |                                     |    
+| Mon, May 19  | S.C. lecture  |                                     |
+| Tue, May 20  | L.T.  lecture |  
+| Mon, May 26  | L.T.  lecture       |       |
+| Tue, May 27  | L.T.  lecture        |          |
 
 #### REFERENCES & BOOKS
 
