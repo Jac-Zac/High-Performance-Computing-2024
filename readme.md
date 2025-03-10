@@ -45,8 +45,8 @@ Here below the schedule for lectures and tutorials.
 | DATE         | LECTURE                                     | TUTORIALS                                                           |
 | :----------  | :---------------------------------------------| :---------------------------------------------                      |
 | Mon, Mar 03  | [0] [Introduction to the course] + [1] [Introduction to HPC] (S.C.)|          | 
-| Tue, Mar 04  | [2] [HPC Hardware] (S.C.) + [3] [HPC Software] (S.C.)|          | 
-| Mon, Mar 10  |  Single core optimization (L.T.)                 |    |
+| Tue, Mar 04  | [2] [HPC Hardware] (S.C.) |          | 
+| Mon, Mar 10  |  [3] [HPC Software] (S.C.)                |  First Tutorial on ORFEO cluster  |
 | Tue, Mar 11  |  Single core optimization (L.T.)         |                                     |                      
 | Mon, Mar 17  |  Single core optimization (L.T.)     |                                     |
 | Mon, Mar 18  |  Single core optimization (L.T.)                               |      |
