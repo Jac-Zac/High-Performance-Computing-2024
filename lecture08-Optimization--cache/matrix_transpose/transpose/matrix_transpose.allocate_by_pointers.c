@@ -61,79 +61,89 @@ extern int TESTS_QUIET;
 char *mode_labels[2] = {"strided write", "contiguous write"};
 
 #define NRUNS    5
-#if (NRUNS < 1)
-#error "NRUNS must be larger than 0"
-#endif
-
 #define L1WORDS (32 * 1024 / 8)  // double capacity of L1
 #define L2WORDS (256 * 1024 / 8) // double capacity of L2
 
 #define dprintf( L, ... ) { if (verbose_level >= (L) ) printf( __VA_ARGS__ ); }
 
 
-void transpose_strided_write( const double * matrix, double * tmatrix, int N )
+double **allocate_matrix( int N )
 {
-  for (int i = 0; i < N; i++) {
-    int offset = i*N;
-    for(int j = 0, acc = 0; j < N; j++, acc+=N)
-      tmatrix[acc + i] = matrix[offset + j]; }
+  double **matrix = (double**)calloc( N, sizeof(double*) );
+  if ( matrix == NULL )
+    return NULL;
+  for ( int row = 0; row < N; row++ ) {
+    matrix[row]  = (double*)calloc( N, sizeof(double) );
+    if( matrix[row] == NULL )
+      return NULL; }
+  return matrix;
+}
+
+
+void transpose_strided_write( double **matrix, double **tmatrix, int N )
+{
+  for (int r = 0; r < N; r++)
+    for ( int c = 0; c < N; c++ )
+      tmatrix[c][r] = matrix[r][c];
   return;
 }
 
 
-void transpose_contiguous_write( const double * matrix, double * tmatrix, int N )
+void transpose_contiguous_write( double **matrix, double **tmatrix, int N )
 {
-  for (int i = 0; i < N; i++) {
-    int offset = i*N;
-    for(int j = 0, acc = 0; j < N; j++, acc+=N)
-      tmatrix[offset + j] = matrix[acc + i]; }
+  for (int r = 0; r < N; r++)
+    for ( int c = 0; c < N; c++ )
+      tmatrix[r][c] = matrix[c][r];	
   return;
 }
-
 
 
 int main(int argc, char **argv)
 {
   if ( (argc>1) &&
        ( (strncmp(*(argv+1), "-h", 2) == 0) ||
-	 (strncmp(*(argv+1), "--help", 6) == 0) ) ) {
+	 (strncmp(*(argv+1), "--help", 6) == 0) ) ) {    
     printf("Expected arguments: "
-	   "[ run mode <0|1> ] [ avoid powers of 2 <0|1> ] [ verbose level ]\n"
+	   " [ run mode <0|1> ] [ avoid powers of 2 <0|1> ] [ verbose level ]\n"
 	   "  run mode is STRIDED_WRITE (=0, default) or CONTIGUOUS_WRITE (=1)\n"
-	   "  avoid powers of 2 (=1 default) to skip cache resonance\n"	   
+	   "  avoid powers of 2 (=1 default) to skip cache resonance\n"
+	   
 	   "  verbose level is >=0 (default =0, minimize the output)\n"
 	   "\n"
 	   "I need at least the size of the matrix\n"); exit(1); }
 
   int     mode          = (argc > 1 ? atoi(*(argv+1)) : STRIDED_WRITE );
-  int     avoid_pwr2    = (argc > 2 ? (atoi(*(argv+2))>0) : 1 );  
+  int     avoid_pwr2    = (argc > 2 ? (atoi(*(argv+2))>0) : 1 );
   int     verbose_level = (argc > 3 ? atoi(*(argv+3)) : 0 );
   int     N, Nmax;
-  double * array, * array_swap;
+  double  ** matrix;
+  double  ** tmatrix;
 
   if ( mode > 1 )
     {
       printf("run mode can only have value in the range [0:1]\n");
       exit(1);
     }
-  
+
+  PAPI_INIT;
+    
   /* declare an array that is more than twice the L2 cache size */
   Nmax           = L2WORDS/2;
-  array          = (double*) calloc(Nmax * Nmax, sizeof(double));
-  array_swap     = (double*) calloc(Nmax * Nmax, sizeof(double));
 
-  if ( (array == NULL) ||
-       (array_swap == NULL ) )
+  matrix  = allocate_matrix( Nmax );
+  tmatrix = allocate_matrix( Nmax );
+
+  if ( (matrix == NULL) ||
+       (tmatrix == NULL) )
     {
       printf("allocation has not succeeded. Try a smaller N\n");
-      exit(2);
+      exit(1);
     }
 
+  
   int Nmin  = 8;
   int Nstep = L1WORDS/4;
   int nruns = NRUNS;
-
-  PAPI_INIT;
   
   dprintf(0, "max N will be %d, Nsteps will be %d, run mode: %s\n",
 	  Nmax, Nstep, mode_labels[mode]);
@@ -141,53 +151,53 @@ int main(int argc, char **argv)
   
   for (N = Nmin; N <= Nmax; )
     {
-      int _N_ = N-avoid_pwr2;  // do not use powers of 2
-      
+
+      int _N_ = N - avoid_pwr2;
       dprintf(1, "Run: data set size=%d x %d\n", _N_, _N_);
       
      #if defined(USE_PAPI)
       unsigned long long values[PAPI_EVENTS_NUM] = {0};
      #endif
-      /* clear the cache by dragging the whole array through it */
-      for (int n = 0; n < Nmax*Nmax; n++) array[n] = 0.;
-      for (int n = 0; n < Nmax*Nmax; n++) array_swap[n] = 0.;
-
+       
+      /* warm-up the cache */
+      for (int i = 0, r = 0; r < _N_; r++)
+	for ( int c = 0; c < _N_; c++, i++ )
+	  matrix[r][c] = (double)i, tmatrix[r][c] = 0.0;
+      
       unsigned int N2 = _N_*_N_;
       double size     = nruns * (double)N2 * sizeof(double) / (1024*1024);
       
-      /* now load the data in the highest cache level that fits */
-      for (int n = 0; n < N2; n++) array[n] = (double)n, array_swap[n]=0;
-
       double timing = 0;
-      
       /* run the experiment */
+	  		  
       if ( mode == STRIDED_WRITE )
-	for (int cc = 0; cc < nruns; cc++)
-	  {
-	    PAPI_FLUSH;
-	    PAPI_START_CNTR;
+	for (int cc = 0; cc < nruns; cc++) {
+	  PAPI_FLUSH;
+	  PAPI_START_CNTR;
+	  
+	  double tstart = CPU_TIME;
+	  transpose_strided_write( matrix, tmatrix, _N_ ); 
+	  timing += CPU_TIME - tstart;
+	  
+	  PAPI_STOP_CNTR;
+	  if( (nruns==1) || (cc > 0) )
+	    PAPI_ACC_CNTR(values);	    
+	}
+      
 
-	    double tstart = CPU_TIME;
-	    transpose_strided_write( (const double *)array, array_swap, _N_);
-	    timing += CPU_TIME - tstart;
-	    PAPI_STOP_CNTR;
-	    if( (nruns==1) || (cc > 0) )
-	      PAPI_ACC_CNTR(values);
-	  }
       else  // STRIDED_READ
-	for (int cc = 0; cc < nruns; cc++)
-	  {
-	    PAPI_FLUSH;
-	    PAPI_START_CNTR;	    	    
-
-	    double tstart = CPU_TIME;
-	    transpose_contiguous_write( (const double *)array, array_swap, _N_ );
-	    timing += CPU_TIME - tstart;
-	    
-	    PAPI_STOP_CNTR;
-	    if( (nruns==1) || (cc > 0) )
-	      PAPI_ACC_CNTR(values);
-	  }
+	for (int cc = 0; cc < nruns; cc++) {
+	  PAPI_FLUSH;
+	  PAPI_START_CNTR;
+	  
+	  double tstart = CPU_TIME;	 
+	  transpose_contiguous_write( matrix, tmatrix, _N_ );	  
+	  timing += CPU_TIME - tstart;
+	  
+	  PAPI_STOP_CNTR; 
+	  if( (nruns==1) || (cc > 0) )
+	    PAPI_ACC_CNTR(values);
+	}
 
       dprintf(0, "size: %d [ %2d nruns] time: %5.3g s [total: %5.3g s] bw: %g MB/s ",
 	      _N_, nruns, timing/nruns, timing, size / timing);
@@ -210,20 +220,22 @@ int main(int argc, char **argv)
 	N*=2;
       else
 	N += Nstep;
-
       
       nruns -= (int)timing / 2;
       if ( nruns < 1 )
 	nruns = 1;
-      
+
   }
 
-  FILE *out = fopen("donotoptimizeout.dat", "w");
-  fwrite( array_swap, Nmax * Nmax,  sizeof(double), out);
-  fclose(out );
-  system("rm -f donotoptimizeout.dat");
   
-  free(array);
+  for ( int r = 0; r < Nmax; r++ )
+    {
+      free( (void*)matrix[r] );
+      free( (void*)tmatrix[r] );
+    }
+  free( (void*)matrix );
+  free( (void*)tmatrix );
+
 
   return 0;
 }

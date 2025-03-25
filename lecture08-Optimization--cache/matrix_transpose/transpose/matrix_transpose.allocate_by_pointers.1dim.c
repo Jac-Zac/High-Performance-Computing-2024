@@ -45,81 +45,97 @@
 #include <sys/resource.h>
 #include <sys/times.h>
 #include <time.h>
-#include "mypapi.h"
+#include <math.h>
 
-extern int TESTS_QUIET;
+#define STRIDED_WRITE 0
+#define STRIDED_READ  1
 
-#define TCPU_TIME (clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts ), (double)ts.tv_sec +	\
-		   (double)ts.tv_nsec * 1e-9)
 
-#define NRUNS 10
-#define L1WORDS (32 * 1024 / 8)  // double capacity of L1
-#define L2WORDS (256 * 1024 / 8) // double capacity of L2
+#define CPU_TIME ({struct  timespec ts; clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts ),	\
+                                          (double)ts.tv_sec +           \
+                                          (double)ts.tv_nsec * 1e-9;})
+
+
+double **allocate_matrix( int N )
+{
+  double **matrix = (double**)calloc( N, sizeof(double*) );
+  if ( matrix == NULL )
+    return NULL;
+  for ( int row = 0; row < N; row++ ) {
+    matrix[row]  = (double*)calloc( N, sizeof(double) );
+    if( matrix[row] == NULL )
+      return NULL; }
+  return matrix;
+}
+
+
+void transpose_strided_write( double **matrix, double **tmatrix, int N )
+{
+  for (int r = 0; r < N; r++)
+    for ( int c = 0; c < N; c++ )
+      tmatrix[c][r] = matrix[r][c];
+  return;
+}
+
+
+void transpose_contiguous_write( double **matrix, double **tmatrix, int N )
+{
+  for (int r = 0; r < N; r++)
+    for ( int c = 0; c < N; c++ )
+      tmatrix[r][c] = matrix[c][r];	
+  return;
+}
 
 int main(int argc, char **argv)
 {
-  
-  int     N, Nmax;
-  double *array, *array_swap;
-  struct timespec ts;
+  int     N             = (argc > 1 ? atoi(*(argv+1) : 10000 );
+  int     mode          = (argc > 2 ? atoi(*(argv+2)) : STRIDED_WRITE );
 
-  PAPI_INIT;
-    
-  /* declare an array that is more than twice the L2 cache size */
-  Nmax           = L2WORDS/2;
-  array          = (double*) malloc(Nmax * Nmax * sizeof(double));
-  array_swap     = (double*) malloc(Nmax * Nmax * sizeof(double));
+  double **matrix  = allocate_matrix( N );
+  double **tmatrix = allocate_matrix( N );
 
-  int Nmin  = 9; //8;
-  int Nstep = L1WORDS/4;
-  for (N = Nmin; N < Nmax; )
+  if ( (matrix == NULL) ||
+       (tmatrix == NULL) )
     {
-      //printf("Run: data set size=%d\n",size);
+      printf("allocation has not succeeded. Try a smaller N\n");
+      exit(1);
+    }
 
-      unsigned long long values[PAPI_EVENTS_NUM] = {0};
-      
-      /* clear the cache by dragging the whole array through it */
-      for (int n = 0; n < Nmax*Nmax; n++) array[n] = 0.;
-      for (int n = 0; n < Nmax*Nmax; n++) array_swap[n] = 0.;
-      
-      /* now load the data in the highest cache level that fits */
-      for (int n = 0; n < N; n++) array[n] = (double)n;
+  /* load the data in the highest cache level that fits */
+  for (int i = 0, r = 0; r < N; r++)
+    for ( int c = 0; c < N; c++, i++ ) {
+      matrix[r][c]  = (double)i;
+      tmatrix[r][c] = 0; }
+  
+  double timing;
+            
+  if ( mode == STRIDED_WRITE ) {
+    transpose_strided_write( matrix, tmatrix, N );
+    timing = CPU_TIME;
+    transpose_strided_write( matrix, tmatrix, N ); }
+  else {  // STRIDED_READ
+    transpose_contiguous_write( matrix, tmatrix, N );
+    timing = CPU_TIME;
+    transpose_contiguous_write( matrix, tmatrix, N ); }
 
-      unsigned int N2 = N*N;
-      double size = NRUNS * (double)N2 * sizeof(double) / (1024*1024);
-      
-      double tstart = TCPU_TIME;
-      /* run the experiment */
-      for (int cc = 0; cc < NRUNS; cc++)
-	{
-	  PAPI_FLUSH;
-	  PAPI_START_CNTR;
-	  for (int i = 0; i < N; i++)
-	    {
-	      int offset = i*N;
-	      for(int j = 0, acc = 0; j < N; j++, acc+=N)
-		array_swap[offset + j] = array[acc + i];
-	    }
-	  PAPI_STOP_CNTR;
-	  if( cc > 0 )
-	    for( int jj = 0; jj < PAPI_EVENTS_NUM; jj++ )
-	      values[jj] += PAPI_GET_CNTR(jj);
-	}
-      double tstop = (TCPU_TIME - tstart);
-      
-      printf("size: %d bw: %g cycles: %lld cycles_per_loc: %9.5f L1miss: %lld L1miss_frac: %9.5f L2miss: %lld L2miss_frac: %9.5f\n",
-	     N, size / tstop,
-	     values[0], values[0]/(2.*NRUNS*N2),
-	     values[1], (double)values[1]/(2.* NRUNS*N2),
-	     values[2], (double)values[2]/(2.* NRUNS*N2));
+  timing = CPU_TIME - timing;
+  printf("timing: %g bw: %g\n", timing, N*N*sizeof(double)/timing/(1024.0*1024.0) );
+  
+  
+  FILE *out = fopen("donotoptimizeout.dat", "w");
+  for ( int r = 0; r < N; r++ )
+    fwrite( tmatrix[r], N,  sizeof(double), out);
+  fclose(out);
+  system("rm -f donotoptimizeout.dat");
 
-      if (N < L1WORDS)
-	N*=2;
-      else
-	N += Nstep;
 
-  }
-  free(array);
+  for ( int r = 0; r < N; r++ )
+    {
+      free( (void*)matrix[r] );
+      free( (void*)tmatrix[r] );
+    }
+  free( (void*)matrix );
+  free( (void*)tmatrix );
 
   return 0;
 }

@@ -45,92 +45,90 @@
 #include <sys/resource.h>
 #include <sys/times.h>
 #include <time.h>
-#include "mypapi.h"
+#include <math.h>
 
-extern int TESTS_QUIET;
+#define STRIDED_WRITE 0
+#define STRIDED_READ  1
 
-#define TCPU_TIME (clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts ), (double)ts.tv_sec +	\
-		   (double)ts.tv_nsec * 1e-9)
+#define NRUNS    5               // NOTE: AT LEAST THIS MUST BE AT LEAST 2
+#if (NRUNS < 2)
+#error "NRUNS must be larger than 1"
+#endif
 
-#define NRUNS 10
-#define L1WORDS (32 * 1024 / 8)  // double capacity of L1
-#define L2WORDS (256 * 1024 / 8) // double capacity of L2
+
+#define CPU_TIME ({struct  timespec ts; clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts ),	\
+                                          (double)ts.tv_sec +           \
+                                          (double)ts.tv_nsec * 1e-9;})
+
+
+void transpose_strided_write( double *matrix, double *tmatrix, int N )
+{
+  for (int i = 0; i < N; i++) {
+    int offset = i*N;
+    for(int j = 0, acc = 0; j < N; j++, acc+=N)
+      tmatrix[acc + i] = matrix[offset + j]; }
+  return;
+}
+
+
+void transpose_contiguous_write( double *matrix, double *tmatrix, int N )
+{
+  for (int i = 0; i < N; i++) {
+    int offset = i*N;
+    for(int j = 0, acc = 0; j < N; j++, acc+=N)
+      tmatrix[offset + j] = matrix[acc + i]; }
+  return;
+}
+
 
 int main(int argc, char **argv)
 {
   
-  int     N, Nmax;
+  int     N             = (argc > 1 ? atoi(*(argv+1) : 10000 );
+  int     mode          = (argc > 2 ? atoi(*(argv+2)) : STRIDED_WRITE );
   double *array, *array_swap;
-  struct timespec ts;
 
-  PAPI_INIT;
-    
-  /* declare an array that is more than twice the L2 cache size */
-  Nmax           = L2WORDS/2;
-  array          = (double*) malloc(Nmax * Nmax * sizeof(double));
-  array_swap     = (double*) malloc(Nmax * Nmax * sizeof(double));
+  array          = (double*) calloc(N*N, sizeof(double));
+  array_swap     = (double*) calloc(N*N, sizeof(double));
 
-  int Nmin  = 9; //8;
-  int Nstep = L1WORDS/4; // this is for the power-of-two serie
-  //int Nstep = L1WORDS/128;
-  for (N = Nmin; N < Nmax;)
+  if ( (array == NULL) ||
+       (array_swap == NULL ) )
     {
-      //printf("Run: data set size=%d\n",size);
-
-      unsigned long long values[PAPI_EVENTS_NUM] = {0};
+      printf("allocation has not succeeded. Try a smaller N\n");
+      exit(1);
+    }
       
-      /* clear the cache by dragging the whole array through it */
-      for (int n = 0; n < Nmax*Nmax; n++) array[n] = 0.;
-      for (int n = 0; n < Nmax*Nmax; n++) array_swap[n] = 0.;
-      
-      /* now load the data in the highest cache level that fits */
-      for (int n = 0; n < N; n++) array[n] = (double)n;
+  /* load the data in the highest cache level that fits */
+  for (int n = 0; n < N*N; n++) {
+    array[n] = (double)n; array_swap[n] = 0.0; }
 
-      unsigned int N2 = N*N;
-      double size = NRUNS * (double)N2 * sizeof(double) / (1024*1024);
 
-      int N4 = 4* N / 4;
-
-      double tstart = TCPU_TIME;
-      /* run the experiment */
-      for (int cc = 0; cc < NRUNS; cc++)
-	{
-	  PAPI_FLUSH;
-	  PAPI_START_CNTR;
-	  for (int i = 0; i < N; i++)
-	    {
-	      int offset = i*N;
-	      int j;
-	      for(j = 0; j < N4; j+=4)
-		{
-		  array_swap[offset + j+1] = array[j*N + i];
-		  array_swap[offset + j+2] = array[(j+1)*N + i];
-		  array_swap[offset + j+3] = array[(j+2)*N + i];
-		  array_swap[offset + j+4] = array[(j+3)*N + i];
-		}
-	      for(; j < N; j++)
-		array_swap[offset + j] = array[j*N + i];
-	    }
-	  PAPI_STOP_CNTR;
-	  if( cc > 0 )
-	    for( int jj = 0; jj < PAPI_EVENTS_NUM; jj++ )
-	      values[jj] += PAPI_GET_CNTR(jj);	  
-	}
-      double tstop = (TCPU_TIME - tstart);
-      
-      printf("size: %d bw: %g cycles: %lld cycles_per_loc: %9.5f L1miss: %lld L1miss_frac: %9.5f L2miss: %lld L2miss_frac: %9.5f\n",
-	     N, size / tstop,
-	     values[0], values[0]/(2.*NRUNS*N2),
-	     values[1], (double)values[1]/(2.* NRUNS*N2),
-	     values[2], (double)values[2]/(2.* NRUNS*N2));
-
-      // this is for the power-of-two serie
-      if (N < L1WORDS)
-      	N*=2;
-      else
-	N += Nstep;
-
-  }
+  double timing;
+  
+  if ( mode == STRIDED_WRITE )
+    {
+      transpose_strided_write( array, array_swap, N );
+      timing = CPU_TIME;
+      for ( int i = 0; i < NRUNS; i++ )
+	transpose_strided_write( array, array_swap, N );
+      timing = (CPU_TIME - timing)/NRUNS;
+    }
+  else  // STRIDED_READ
+    {
+      transpose_contiguous_write( array, array_swap, N );
+      timing = CPU_TIME;
+      for ( int i = 0; i < NRUNS; i++ )
+	transpose_contiguous_write( array, array_swap, N );
+      timing = (CPU_TIME - timing)/NRUNS;
+    }
+  
+  printf("timing: %g bw: %g\n", timing, N*N*sizeof(double)/timing/(1024.0*1024.0) );
+  
+  FILE *out = fopen("donotoptimizeout.dat", "w");
+  fwrite( array_swap, N * N,  sizeof(double), out);
+  fclose(out);
+  system("rm -f donotoptimizeout.dat");
+  
   free(array);
 
   return 0;
