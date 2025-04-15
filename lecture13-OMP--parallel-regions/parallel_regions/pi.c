@@ -26,12 +26,15 @@ int main ( int argc, char **argv )
       // 1) generate x and y by rand48()
       // 2) check whether they are in the circle of radius 1
       // 3) increase the counter
+      double x = drand48();
+      double y = drand48();
+      valid_points += (x*x + y*y <= 1);
     }
   timing = CPU_TIME_P - timing;
   
   printf("value of pi greek is: %g\n"
 	 "elapsed time is %g sec\n",
-	 valid_points/Nshots * 4, timing);
+	 (double)valid_points/Nshots * 4, timing);
 
   return 0;
 }
