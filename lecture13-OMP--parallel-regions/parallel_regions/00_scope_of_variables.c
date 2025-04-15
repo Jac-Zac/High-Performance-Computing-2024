@@ -53,8 +53,8 @@ int main( int argc, char **argv )
     int me = omp_get_thread_num();
     
     printf( "\tthread nr %d    ( tid %ld, from pid %d ) :\n"
-	    "\t\tmy i address is %p\n",
-	    me, syscall(SYS_gettid), (int)getpid(), &i );
+	    "\t\tmy i address is %p %p\n",
+	    me, syscall(SYS_gettid), (int)getpid(), &i, &me );
   }
 
   printf( "\n" );  
