@@ -110,7 +110,7 @@ int main( int argc, char **argv )
    */
 
 
-  double S           = 0;                                   // this will store the summation
+  double S           = 0;                 // this will store the summation
   double tstart      = CPU_TIME;
   
  #pragma omp parallel
@@ -120,8 +120,9 @@ int main( int argc, char **argv )
     for (int ii = 0; ii < N; ii++ )
       myS += array[ii];
     
-   #pragma omp atomic update
-    S += myS;
+   #pragma omp atomic update              // <--- what if you implement a                 
+    S += myS;                             //      hierarchical final summation
+					  //      which behaves as ~log N_threads ?
   }
   
   

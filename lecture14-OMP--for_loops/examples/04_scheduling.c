@@ -38,6 +38,10 @@
 #include <omp.h>
 
 
+#if !defined(_OPENMP)
+#error "OpenMP support is required for this code"
+#endif
+
 #define STATIC  0
 #define DYNAMIC 1
 #define GUIDED  2
