@@ -50,7 +50,7 @@ int main( int argc, char **argv )
   int     nthreads = 1;
   
   struct  timespec ts;
-  double *array;
+  unsigned int *array;
 
 
 
@@ -65,7 +65,7 @@ int main( int argc, char **argv )
 
 
   // allocate memory
-  if ( (array = (double*)calloc( N, sizeof(double) )) == NULL )
+  if ( (array = (unsigned*)calloc( N, sizeof(int) )) == NULL )
     {
       printf("I'm sorry, there is not enough memory to host %lu bytes\n", N * sizeof(double) );
       return 1;
@@ -94,7 +94,7 @@ int main( int argc, char **argv )
   // initialize the array with the first N integer nums
   //
   for ( int ii = 0; ii < N; ii++ )                          // choose the initialization you prefer
-    array[ii] = (double)ii;                                 // the one with integers make it easier
+    array[ii] = ii;                                         // the one with integers make it easier
                                                             // to verify the result
                                                             // otherwise you should initialize srand48
 							    // with a constant seed
@@ -107,7 +107,7 @@ int main( int argc, char **argv )
    */
 
 
-  double S       = 0;                                       // this will store the summation
+  unsigned long long int S = 0;                                       // this will store the summation
 
   double tstart  = CPU_TIME;
   
@@ -120,11 +120,11 @@ int main( int argc, char **argv )
 
   
  #pragma omp parallel for 
-    for ( int ii = 0; ii < N; ii++ )
-      //#pragma omp atomic update                             // this op needs to be protected
+  for ( int ii = 0; ii < N; ii++ )
+    //#pragma omp atomic update                             // this op needs to be protected
                                                             // if you keep it commentend, that
 							    // results in a data race       
-      S += array[ii];
+    S += array[ii];
 
  #endif
 
@@ -136,7 +136,8 @@ int main( int argc, char **argv )
    *  -----------------------------------------------------------------------------
    */
 
-  printf("Sum is %g, process took %g of wall-clock time\n", S, tend - tstart );
+  printf("Sum is %llu (expected: %llu), process took %g of wall-clock time\n", 
+		  S, (unsigned long long)N*(N+1)/2, tend - tstart );
   
   free( array );
   return 0;
