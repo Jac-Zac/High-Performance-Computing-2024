@@ -18,8 +18,6 @@ int main(int argc,char **argv)
       MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-  max_size = ( argc > 1 ? atoi(*(argv+1)) : 20 );
-  
   int Myrank, Ntasks;
   MPI_Comm myCOMM_WORLD;
 
@@ -28,19 +26,29 @@ int main(int argc,char **argv)
   MPI_Comm_rank( myCOMM_WORLD, &Myrank );     
 
   
-/**** your code here ****/
-  double timing[max_size] = {0};
-  max_size = ( 1 << max_size);
-  char *buffer_send = (char*)malloc( max_size );
-  char *buffer_recv = (char*)malloc( max_size );
+  int max_logsize = ( argc > 1 ? atoi(*(argv+1)) : 20 );
+  if ( max_logsize > 31 )
+    {
+      if ( Myrank == 0 )
+	printf("don't be greedy, use log size < 31\n");
+      MPI_Finalize();
+      return 1;
+    }
+  
+  unsigned int max_size = ( 1<< max_logsize);
+    
+  double timing[max_logsize] = {0};
+  char *buffer_send = (char*)malloc( max_logsize );
+  char *buffer_recv = (char*)malloc( max_logsize );
   
   if ( Rank == 0 )
     {
-      for ( int j = 1; j < max_size; j++ )
+      for ( unsigned int j = 1; j < max_size; j++ )
 	buffer_send[j] = 1;  // not so important, though
       
-      for ( int j = 1; j < max_size; j<<1 )
+      for ( int j = 1; j < max_logsize; j++ )
 	{
+	  unsigned int size = ( 1 << j );
 	  timing[j] = MPI_Wtime();
 
 	  for ( int n = 0; n < COUNTS; n++ )
@@ -61,7 +69,7 @@ int main(int argc,char **argv)
     {
       // complete
     }
-  }
+
 
   MPI_Finalize();
   return 0;
