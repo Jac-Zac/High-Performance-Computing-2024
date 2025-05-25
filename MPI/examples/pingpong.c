@@ -27,21 +27,23 @@ int main(int argc,char **argv)
 
   
   int max_logsize = ( argc > 1 ? atoi(*(argv+1)) : 20 );
-  if ( max_logsize > 31 )
+  if ( max_logsize >= 24 )
     {
       if ( Myrank == 0 )
-	printf("don't be greedy, use log size < 31\n");
+	printf("don't be greedy, use max log size < 24\n");
       MPI_Finalize();
       return 1;
     }
-  
+
+  printf ( "running with max log size : %d\n", max_logsize);
   unsigned int max_size = ( 1<< max_logsize);
     
-  double timing[max_logsize] = {0};
+  double timing[max_logsize];
+  memset ( timing, 0, max_logsize * sizeof(double) );
   char *buffer_send = (char*)malloc( max_logsize );
   char *buffer_recv = (char*)malloc( max_logsize );
   
-  if ( Rank == 0 )
+  if ( Myrank == 0 )
     {
       for ( unsigned int j = 1; j < max_size; j++ )
 	buffer_send[j] = 1;  // not so important, though
@@ -65,7 +67,7 @@ int main(int argc,char **argv)
       // print results
       
     }
-  else if ( Rank == 1)
+  else if ( Myrank == 1)
     {
       // complete
     }
