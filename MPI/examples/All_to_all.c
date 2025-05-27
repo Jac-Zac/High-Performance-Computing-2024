@@ -9,7 +9,10 @@
 #include <mpi.h>
 
 
-typedef struct { int data[2] } data_t;
+typedef struct { int data[2]; } data_t;
+typedef struct {
+    unsigned int sender_fails;
+  unsigned int receiver_fails; } fails_t;
 
   
 int main( int argc, char **argv )
@@ -39,14 +42,12 @@ int main( int argc, char **argv )
       mydata[i].data[1] = i;      
     }
 
-.....
+
 
 
   // checking
-  struct fails {
-    unsigned int sender_fails   = 0;
-    unsigned int receiver_fails = 0; }
-    
+
+  fails_t fails = {0,0};
   for ( int i = 0; i < Ntasks; i++ )
     {
       fails.sender_fails += alldata[i].data[0] != i;
