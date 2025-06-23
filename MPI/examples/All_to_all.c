@@ -202,8 +202,8 @@ int main( int argc, char **argv )
   fails_t fails = {0,0};
   for ( int i = 0; i < Ntasks; i++ )
     {
-      fails.sender_fails += alldata[i].data[0] != i;
-      fails.receiver_fails += alldata[i].data[1] != Myrank;
+      fails.sender_fails += alldata[i].data[0] != i;         // if the sender wasn't rank i, that's an error
+      fails.receiver_fails += alldata[i].data[1] != Myrank;  // if I wasn't the target, that's an error
     }
 
   // everybody want to know the truth, so we propgate via an Allreduce

@@ -95,7 +95,7 @@ int main( int argc, char **argv )
   if ( Myrank == 0 )
     /* collect the partial results */
     {
-      unsigned long long all_inner_points = 0; 
+      unsigned long long all_inner_points = inner_points; 
       for ( int t = 0; t < Ntasks-1; t++ )
 	/* get the result of every single MPI tasks */
 	{
