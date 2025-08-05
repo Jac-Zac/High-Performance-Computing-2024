@@ -1,0 +1,2 @@
+CompileFlags:
+  Add: [-fopenmp, -D_OPENMP]
