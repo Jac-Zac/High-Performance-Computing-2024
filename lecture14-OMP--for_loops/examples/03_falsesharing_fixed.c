@@ -24,65 +24,57 @@
  │                                                                            │
  * ────────────────────────────────────────────────────────────────────────── */
 
-
 #if defined(__STDC__)
-#  if (__STDC_VERSION__ >= 199901L)
-#     define _XOPEN_SOURCE 700
-#  endif
+#if (__STDC_VERSION__ >= 199901L)
+#define _XOPEN_SOURCE 700
 #endif
-#include <stdlib.h>
+#endif
+#include <omp.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
-#include <sys/syscall.h>
-#include <omp.h>
-
 
 #define N_default 100
 
-#define CPU_TIME_W (clock_gettime( CLOCK_REALTIME, &ts ), (double)ts.tv_sec +	\
-		    (double)ts.tv_nsec * 1e-9)
+#define CPU_TIME_W                                                             \
+  (clock_gettime(CLOCK_REALTIME, &ts),                                         \
+   (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9)
 
-#define CPU_TIME_T (clock_gettime( CLOCK_THREAD_CPUTIME_ID, &myts ), (double)myts.tv_sec +	\
-		     (double)myts.tv_nsec * 1e-9)
+#define CPU_TIME_T                                                             \
+  (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &myts),                              \
+   (double)myts.tv_sec + (double)myts.tv_nsec * 1e-9)
 
-#define CPU_TIME_P (clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts ), (double)ts.tv_sec +	\
-		   (double)ts.tv_nsec * 1e-9)
-
-
-
+#define CPU_TIME_P                                                             \
+  (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts),                               \
+   (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9)
 
 #define CPU_ID_ENTRY_IN_PROCSTAT 39
-#define HOSTNAME_MAX_LENGTH      200
+#define HOSTNAME_MAX_LENGTH 200
 
-int read_proc__self_stat ( int, int * );
-int get_cpu_id           ( void       );
+int read_proc__self_stat(int, int *);
+int get_cpu_id(void);
 
+int main(int argc, char **argv) {
 
+  int N = N_default;
+  int nthreads = 1;
 
-
-
-int main( int argc, char **argv )
-{
-
-  int     N        = N_default;
-  int     nthreads = 1;
-  
-  struct  timespec ts;
+  struct timespec ts;
   double *array;
 
   // check whether some arg has been passed on
-  if ( argc > 1 )
-    N = atoi( *(argv+1) );
-
+  if (argc > 1)
+    N = atoi(*(argv + 1));
 
   // allocate memory
-  if ( (array = (double*)calloc( N, sizeof(double) )) == NULL )
-    {
-      printf("I'm sorry, there is not enough memory to host %lu bytes\n", N * sizeof(double) );
-      return 1;
-    }
+  if ((array = (double *)calloc(N, sizeof(double))) == NULL) {
+    printf("I'm sorry, there is not enough memory to host %lu bytes\n",
+           N * sizeof(double));
+    return 1;
+  }
 
   // just give notice of what will happen and get the number of threads used
 #pragma omp parallel
@@ -90,83 +82,71 @@ int main( int argc, char **argv )
 #pragma omp master
     {
       nthreads = omp_get_num_threads();
-      printf("omp summation with %d threads\n", nthreads );
+      printf("omp summation with %d threads\n", nthreads);
     }
     int me = omp_get_thread_num();
 #pragma omp critical
-    printf("thread %2d is running on core %2d\n", me, get_cpu_id() );
-
+    printf("thread %2d is running on core %2d\n", me, get_cpu_id());
   }
 
-
-  for ( int ii = 0; ii < N; ii++ )
+  for (int ii = 0; ii < N; ii++)
     array[ii] = (double)ii;
 
+  double S[nthreads][8]; // this will store the summation's chunks
 
-  double S[nthreads][8];                                    // this will store the summation's chunks
-  
-  double tstart  = CPU_TIME_W;  
+  double tstart = CPU_TIME_W;
 
 #pragma omp parallel shared(S)
-  {    
-    int    me      = omp_get_thread_num();
-    S[me][0]       = 0;
+  {
+    int me = omp_get_thread_num();
+    S[me][0] = 0;
 #pragma omp for
-    for ( int ii = 0; ii < N; ii++ )
-	S[me][0] += array[ii];
+    for (int ii = 0; ii < N; ii++)
+      S[me][0] += array[ii];
   }
 
-  if ( nthreads > 1 )
-    for ( int ii = 1; ii < nthreads; ii++ )
+  if (nthreads > 1)
+    for (int ii = 1; ii < nthreads; ii++)
       S[0][0] += S[ii][0];
-  
+
   double tend = CPU_TIME_W;
 
   printf("Sum is %g, process took %g sec of wall-clock time\n\bn"
-	 "<%g> sec of thread-time \n",
-	 S[0][0], tend - tstart);
+         "<%g> sec of thread-time \n",
+         S[0][0], tend - tstart);
 
-  free( array );
+  free(array);
   return 0;
 }
 
+int get_cpu_id(void) {
+#if defined(_GNU_SOURCE) // GNU SOURCE ------------
 
-
-
-
-
-int get_cpu_id( void )
-{
-#if defined(_GNU_SOURCE)                              // GNU SOURCE ------------
-  
-  return  sched_getcpu( );
+  return sched_getcpu();
 
 #else
 
-#ifdef SYS_getcpu                                     //     direct sys call ---
-  
+#ifdef SYS_getcpu //     direct sys call ---
+
   int cpuid;
-  if ( syscall( SYS_getcpu, &cpuid, NULL, NULL ) == -1 )
+  if (syscall(SYS_getcpu, &cpuid, NULL, NULL) == -1)
     return -1;
   else
     return cpuid;
-  
-#else      
+
+#else
 
   unsigned val;
-  if ( read_proc__self_stat( CPU_ID_ENTRY_IN_PROCSTAT, &val ) == -1 )
+  if (read_proc__self_stat(CPU_ID_ENTRY_IN_PROCSTAT, &val) == -1)
     return -1;
 
   return (int)val;
 
-#endif                                                // -----------------------
+#endif // -----------------------
 #endif
-
 }
 
-
-
-int read_proc__self_stat( int field, int *ret_val )
+int read_proc__self_stat(int field, int *ret_val)
 /*
   Other interesting fields:
 
@@ -182,27 +162,31 @@ int read_proc__self_stat( int field, int *ret_val )
  */
 {
   // not used, just mnemonic
-  // char *table[ 52 ] = { [0]="pid", [1]="father", [13]="utime", [14]="cutime", [18]="nthreads", [22]="rss", [38]="cpuid"};
+  // char *table[ 52 ] = { [0]="pid", [1]="father", [13]="utime", [14]="cutime",
+  // [18]="nthreads", [22]="rss", [38]="cpuid"};
 
   *ret_val = 0;
 
-  FILE *file = fopen( "/proc/self/stat", "r" );
-  if (file == NULL )
+  FILE *file = fopen("/proc/self/stat", "r");
+  if (file == NULL)
     return -1;
 
-  char   *line = NULL;
-  int     ret;
-  size_t  len;
-  ret = getline( &line, &len, file );
+  char *line = NULL;
+  int ret;
+  size_t len;
+  ret = getline(&line, &len, file);
   fclose(file);
 
-  if( ret == -1 )
+  if (ret == -1)
     return -1;
 
   char *savetoken = line;
-  char *token = strtok_r( line, " ", &savetoken);
+  char *token = strtok_r(line, " ", &savetoken);
   --field;
-  do { token = strtok_r( NULL, " ", &savetoken); field--; } while( field );
+  do {
+    token = strtok_r(NULL, " ", &savetoken);
+    field--;
+  } while (field);
 
   *ret_val = atoi(token);
 

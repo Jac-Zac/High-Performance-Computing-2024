@@ -24,7 +24,6 @@
  │                                                                            │
  * ────────────────────────────────────────────────────────────────────────── */
 
-
 /*
  *  This code is equivalent to 01_array_sum.c but for the fact that
  *  the reduction is implemented by hands instead of using the reduction()
@@ -32,110 +31,108 @@
  *
  */
 
-
 #if defined(__STDC__)
-#  if (__STDC_VERSION__ >= 199901L)
-#     define _XOPEN_SOURCE 700
-#  endif
+#if (__STDC_VERSION__ >= 199901L)
+#define _XOPEN_SOURCE 700
+#endif
 #endif
 #if !defined(_OPENMP)
 #error "OpenMP support needed for this code"
 #endif
-#include <stdlib.h>
+#include <omp.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <omp.h>
-
-
 
 #if defined(_OPENMP)
-#define CPU_TIME ({struct  timespec ts; clock_gettime( CLOCK_REALTIME, &ts ),\
-					  (double)ts.tv_sec +		\
-					  (double)ts.tv_nsec * 1e-9;})
+#define CPU_TIME                                                               \
+  ({                                                                           \
+    struct timespec ts;                                                        \
+    clock_gettime(CLOCK_REALTIME, &ts),                                        \
+        (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;                         \
+  })
 
-#define CPU_TIME_th ({struct  timespec myts; clock_gettime( CLOCK_THREAD_CPUTIME_ID, &myts ),\
-					     (double)myts.tv_sec +	\
-					     (double)myts.tv_nsec * 1e-9;})
+#define CPU_TIME_th                                                            \
+  ({                                                                           \
+    struct timespec myts;                                                      \
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &myts),                             \
+        (double)myts.tv_sec + (double)myts.tv_nsec * 1e-9;                     \
+  })
 #else
 
-#define CPU_TIME ({struct  timespec ts; clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &ts ),\
-					  (double)ts.tv_sec +		\
-					  (double)ts.tv_nsec * 1e-9;})
+#define CPU_TIME                                                               \
+  ({                                                                           \
+    struct timespec ts;                                                        \
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts),                              \
+        (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;                         \
+  })
 
 #endif
 
 #define N_default 100
 
-
-int main( int argc, char **argv )
-{
+int main(int argc, char **argv) {
 
   unsigned long long int N = N_default;
-  int     nthreads = 1;  
+  int nthreads = 1;
   double *array;
 
   /*  -----------------------------------------------------------------------------
-   *   initialize 
+   *   initialize
    *  -----------------------------------------------------------------------------
    */
 
   // check whether some arg has been passed on
-  if ( argc > 1 )
-    N = (unsigned long long int)atoll( *(argv+1) );
-
+  if (argc > 1)
+    N = (unsigned long long int)atoll(*(argv + 1));
 
   // just give notice of what will happen and get the number of threads used
- #pragma omp parallel
- #pragma omp master
+#pragma omp parallel
+#pragma omp master
   nthreads = omp_get_num_threads();
 
-  printf("omp summation with %d threads\n", nthreads );
+  printf("omp summation with %d threads\n", nthreads);
 
   // allocate memory
-  if ( (array = (double*)calloc( N, sizeof(double) )) == NULL )
-    {
-      printf("I'm sorry, there is not enough memory to host %llu bytes\n",
-	     N * sizeof(double) );
-      return 1;
-    }
+  if ((array = (double *)calloc(N, sizeof(double))) == NULL) {
+    printf("I'm sorry, there is not enough memory to host %llu bytes\n",
+           N * sizeof(double));
+    return 1;
+  }
   // initialize the array
-  for ( int ii = 0; ii < N; ii++ )
+  for (int ii = 0; ii < N; ii++)
     array[ii] = (double)ii;
-
 
   /*  -----------------------------------------------------------------------------
    *   calculate
    *  -----------------------------------------------------------------------------
    */
 
+  double S = 0; // this will store the summation
+  double tstart = CPU_TIME;
 
-  double S           = 0;                 // this will store the summation
-  double tstart      = CPU_TIME;
-  
- #pragma omp parallel
+#pragma omp parallel
   {
     double myS = 0;
-   #pragma omp for
-    for (int ii = 0; ii < N; ii++ )
+#pragma omp for
+    for (int ii = 0; ii < N; ii++)
       myS += array[ii];
-    
-   #pragma omp atomic update              // <--- what if you implement a                 
-    S += myS;                             //      hierarchical final summation
-					  //      which behaves as ~log N_threads ?
+
+#pragma omp atomic update // <--- what if you implement a
+    S += myS;             //      hierarchical final summation
+                          //      which behaves as ~log N_threads ?
   }
-  
-  
+
   /*  -----------------------------------------------------------------------------
    *   finalize
    *  -----------------------------------------------------------------------------
    */
-  
+
   double tend = CPU_TIME;
-  printf("Sum is %g, process took %g of wall-clock time\n\n",
-	 S, tend - tstart );
-  
-  free( array );
-  
+  printf("Sum is %g, process took %g of wall-clock time\n\n", S, tend - tstart);
+
+  free(array);
+
   return 0;
 }
