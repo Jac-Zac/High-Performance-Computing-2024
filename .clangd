@@ -1,2 +1,2 @@
 CompileFlags:
-  Add: [-fopenmp, -D_OPENMP]
+  Add: [-I/opt/homebrew/Cellar/open-mpi/5.0.8/include, -fopenmp, -D_OPENMP]
