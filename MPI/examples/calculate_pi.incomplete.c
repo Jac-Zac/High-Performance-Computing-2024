@@ -36,7 +36,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define MASTER 0
 #define SENDER_TAG 0
 
 #define TCPU                                                                   \
@@ -96,31 +95,31 @@ int main(int argc, char **argv) {
     inner_points += ((x * x + y * y) < 1.0);
   }
 
-  if (Myrank == 0)
-  /* collect the partial results */
-  {
-    unsigned long long all_inner_points = 0;
-    for (int t = 0; t < Ntasks - 1; t++)
+  // Collect the partial results
+  if (Myrank == 0) {
+    // Also keep track of the initial points to avoid wasting the computation
+    unsigned long long all_inner_points = inner_points;
     /* get the result of every single MPI tasks */
-    {
-      // ... fill the gap
-      unsigned int *sender_buff[Ntasks]; // source
+    for (int t = 0; t < Ntasks - 1; t++) {
       MPI_Status status;
-      // Use anysource to recive from any rank
-      // Currently only doing it for another process
-      MPI_Recv((sender_buff + t), 1, MPI_INT, MPI_ANY_SOURCE, SENDER_TAG,
+      // Use any sources to receive from any rank
+      MPI_Recv(&inner_points, 1, MPI_INT, MPI_ANY_SOURCE, SENDER_TAG,
                myCOMM_WORLD, &status);
 
-      printf("Recived: %d ", sender_buff[t]);
-
-      // printf("pi greek estimate out of %llu points is: %g\n", ...);
+      // Adding partial results
+      all_inner_points += inner_points;
+      printf("Task 0 has received the result from task %d\n",
+             status.MPI_SOURCE);
     }
-  } else {
+    unsigned long long int all_points = (unsigned long long int)N * Ntasks;
 
+    printf("pi greek estimate out of %llu points is: %g\n", all_points,
+           (double)all_inner_points * 4.0 / all_points);
+
+  } else {
     /* send the partial result */
-    // fill the gap
-    MPI_Send(&inner_points, 1, MPI_INT, MASTER, SENDER_TAG, myCOMM_WORLD);
-    MPI_Finalize();
+    MPI_Send(&inner_points, 1, MPI_INT, 0, SENDER_TAG, myCOMM_WORLD);
   }
+  MPI_Finalize();
   return 0;
 }
